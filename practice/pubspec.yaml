@@ -1,0 +1,59 @@
+name: practice
+description: "Expense Tracker Flutter App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^4.1.0
+  firebase_auth: ^6.0.2
+  cloud_firestore: ^6.0.1
+
+  # Auth & Storage
+  google_sign_in: ^6.2.1
+  shared_preferences: ^2.2.3
+
+  # UI & Icons
+  cupertino_icons: ^1.0.8
+  font_awesome_flutter: ^10.7.0
+  flutter_signin_button: ^2.1.1
+
+  # Utilities
+  intl: ^0.20.2
+  permission_handler: ^12.0.1
+
+  # Reports / Export
+  pdf: ^3.11.0
+  csv: ^6.0.0
+  path_provider: ^2.1.3
+  open_filex: ^4.4.0
+
+  # Charts
+  fl_chart: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # App Icon Generator
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
