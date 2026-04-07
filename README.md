@@ -90,6 +90,7 @@ This project demonstrates a real-world expense tracking solution with authentica
 ## 👨‍💻 Developed By
 
 **Dhruvin Parmar**
+
 PixelForgeX.dev
 
 ---
