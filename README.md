@@ -1,16 +1,101 @@
-# practice
+# 💰 Expense Tracker App
 
-A new Flutter project.
+A modern and smart expense tracking application built using Flutter & Firebase to manage daily finances efficiently.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## 🚀 Live Overview
 
-A few resources to get you started if this is your first Flutter project:
+A clean and user-friendly mobile app designed to track income, expenses, and budgets with real-time insights.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## ✨ Features
+
+* ➕ Add Income & Expenses
+* 📂 Category-wise tracking
+* 📊 Daily / Monthly reports
+* 💰 Budget management
+* 🔔 Budget alerts
+* 🔥 Clean and modern UI
+
+---
+
+## 📷 Screenshots
+
+### 📊 Dashboard
+
+<p align="center">
+  <img src="ScreenShots/dashboard.png" width="300"/>
+</p>
+
+### ➕ Add Expense
+
+<p align="center">
+  <img src="ScreenShots/add_expense.png" width="300"/>
+</p>
+
+### 📈 Reports
+
+<p align="center">
+  <img src="ScreenShots/reports.png" width="300"/>
+</p>
+
+### 📂 Categories
+
+<p align="center">
+  <img src="ScreenShots/category.png" width="300"/>
+</p>
+
+---
+
+## 🎥 Demo Video
+
+👉 (Add your demo video link here)
+
+---
+
+## 📦 APK Download
+
+👉 (Add APK download link here)
+
+---
+
+## 🛠 Tech Stack
+
+* Flutter
+* Dart
+* Firebase
+
+---
+
+## 📁 Project Structure
+
+* lib/ → Main application code
+* assets/ → Images & icons
+* android/ → Android configuration
+* ios/ → iOS configuration
+
+---
+
+## 🎯 Purpose
+
+This project was built to demonstrate a real-world expense tracking solution with clean UI and scalable architecture.
+
+---
+
+## 👨‍💻 Developed By
+
+**Dhruvin Parmar**
+PixelForgeX.dev
+
+---
+
+## 📞 Contact
+
+* 📸 Instagram: @PixelForgeX.dev
+* 📧 Email: [pixelforgex.dev@gmail.com](mailto:pixelforgex.dev@gmail.com)
+
+---
+
+⭐ If you like this project, don’t forget to star the repo!
