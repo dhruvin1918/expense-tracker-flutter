@@ -1,25 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:practice/Pages/addcategories.dart';
+import 'package:practice/Pages/report.dart';
 import 'package:practice/Pages/setting.dart';
 import 'package:practice/screen/home_page.dart';
-import 'package:practice/widgets/wrapper.dart';
-import 'package:practice/Pages/report.dart';
+import 'package:practice/services/auth_service.dart';
 
 class Navigationbar extends StatefulWidget {
   final String userName;
   final String? userPhotoUrl;
-  final bool isDarkMode;
-  final Function(bool) onThemeChanged;
   const Navigationbar({
     super.key,
     required this.userName,
     this.userPhotoUrl,
-    required this.isDarkMode,
-    required this.onThemeChanged,
   });
 
   @override
-  State<Navigationbar> createState() => _NavigationbarState();
+  State<Navigationbar> createState() =>
+      _NavigationbarState();
 }
 
 class _NavigationbarState extends State<Navigationbar> {
@@ -28,22 +25,57 @@ class _NavigationbarState extends State<Navigationbar> {
   late final List<Widget> _pages;
 
   void _handleLogout() async {
-    await signOut();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text(
+            'Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await AuthService.signOut();
+    } catch (e) {
+      debugPrint('Logout error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Sign out failed. Please try again.'),
+        ),
+      );
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    final normalizedPhotoUrl =
+        (widget.userPhotoUrl?.trim().isNotEmpty ?? false)
+            ? widget.userPhotoUrl
+            : null;
+
     _pages = [
-      MyHomePage(userEmail: widget.userName),
+      MyHomePage(userName: widget.userName),
       const Addcategories(),
       const ReportPage(),
       Setting(
-        userEmail: widget.userName,
+        userName: widget.userName,
         onLogout: _handleLogout,
-        userPhotoUrl: widget.userPhotoUrl,
-        isDarkMode: widget.isDarkMode,
-        onThemeChanged: widget.onThemeChanged,
+        userPhotoUrl: normalizedPhotoUrl,
       ),
     ];
   }
@@ -53,8 +85,14 @@ class _NavigationbarState extends State<Navigationbar> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: SafeArea(child: _pages[_currentIndex]),
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
+      ),
       bottomNavigationBar: Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colorScheme.surface,
           borderRadius: const BorderRadius.only(
@@ -74,18 +112,26 @@ class _NavigationbarState extends State<Navigationbar> {
           currentIndex: _currentIndex,
           backgroundColor: Colors.transparent,
           elevation: 0,
+          iconSize: 26,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
           selectedItemColor: colorScheme.primary,
           unselectedItemColor: colorScheme.outline,
-          onTap: (index) => setState(() => _currentIndex = index),
+          onTap: (index) =>
+              setState(() => _currentIndex = index),
           items: const [
             BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded), label: "Home"),
+                icon: Icon(Icons.home_rounded),
+                label: "Home"),
             BottomNavigationBarItem(
-                icon: Icon(Icons.category_rounded), label: "Categories"),
+                icon: Icon(Icons.category_rounded),
+                label: "Categories"),
             BottomNavigationBarItem(
-                icon: Icon(Icons.bar_chart_rounded), label: "Report"),
+                icon: Icon(Icons.bar_chart_rounded),
+                label: "Report"),
             BottomNavigationBarItem(
-                icon: Icon(Icons.settings_rounded), label: "Settings"),
+                icon: Icon(Icons.settings_rounded),
+                label: "Settings"),
           ],
         ),
       ),

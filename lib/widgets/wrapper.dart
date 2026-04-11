@@ -1,65 +1,119 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:practice/screen/welcome_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:practice/Toggle/navigationbar.dart';
+import 'package:practice/screen/welcome_screen.dart';
 
-class Wrapper extends StatelessWidget {
-  final bool isDarkMode;
-  final Function(bool) onThemeChanged;
+class Wrapper extends StatefulWidget {
+  const Wrapper({super.key});
 
+  @override
+  State<Wrapper> createState() => _WrapperState();
+}
 
-  const Wrapper({
-    super.key,
-    required this.isDarkMode,
-    required this.onThemeChanged,
-  });
+class _WrapperState extends State<Wrapper> {
+  int _retryToken = 0;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
+      key: ValueKey(_retryToken),
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Scaffold(
-            body: Center(child: Text('Something went wrong!')),
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.wifi_off_rounded,
+                      size: 48,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .error,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Unable to connect. Please try again.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _retryToken++;
+                        });
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Retrying connection...'),
+                          ),
+                        );
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState ==
+            ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 96,
+                    height: 96,
+                    child: Image(
+                      image: AssetImage(
+                          'assets/images/logo.png'),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  CircularProgressIndicator(),
+                ],
+              ),
+            ),
           );
         }
 
         if (snapshot.hasData) {
           final user = snapshot.data!;
-          final userName = user.displayName ?? user.email ?? "Guest";
+          final userName =
+              user.displayName ?? user.email ?? "User";
           final userPhotoUrl = user.photoURL;
 
-          return Navigationbar(
-            userName: userName,
-            userPhotoUrl: userPhotoUrl,
-            isDarkMode: isDarkMode,
-            onThemeChanged: onThemeChanged,
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(
+                    opacity: animation, child: child),
+            child: Navigationbar(
+              key: const ValueKey('nav'),
+              userName: userName,
+              userPhotoUrl: userPhotoUrl,
+            ),
           );
         }
 
-        return const WelcomeScreen();
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          transitionBuilder: (child, animation) =>
+              FadeTransition(
+                  opacity: animation, child: child),
+          child:
+              const WelcomeScreen(key: ValueKey('welcome')),
+        );
       },
     );
-  }
-}
-
-Future<void> signOut() async {
-  if (kIsWeb) {
-    // On Web → only FirebaseAuth is needed
-    await FirebaseAuth.instance.signOut();
-  } else {
-    // On Android/iOS → sign out from both GoogleSignIn and FirebaseAuth
-    final googleSignIn = GoogleSignIn();
-    await googleSignIn.signOut();
-    await FirebaseAuth.instance.signOut();
   }
 }

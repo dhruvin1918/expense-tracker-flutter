@@ -1,13 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:permission_handler/permission_handler.dart';
 
 class ReportPage extends StatefulWidget {
   const ReportPage({super.key});
@@ -33,6 +35,7 @@ class _ReportPageState extends State<ReportPage> {
   Map<String, double> _categoryExpenses = {};
   Map<String, double> _dateWiseSummary = {};
   bool _isLoading = false;
+  bool _isExporting = false;
 
   DateTime? _customStartDate;
   DateTime? _customEndDate;
@@ -44,7 +47,9 @@ class _ReportPageState extends State<ReportPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchTransactions(
-      String collection, DateTime startDate, DateTime endDate) async {
+      String collection,
+      DateTime startDate,
+      DateTime endDate) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
 
@@ -69,7 +74,10 @@ class _ReportPageState extends State<ReportPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to fetch data from $collection: $e')),
+          const SnackBar(
+            content: Text(
+                'Failed to load report data. Please try again.'),
+          ),
         );
       }
       return [];
@@ -88,11 +96,14 @@ class _ReportPageState extends State<ReportPage> {
     switch (_selectedReportType) {
       case 'Daily':
         startDate = DateTime(now.year, now.month, now.day);
-        endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        endDate = DateTime(
+            now.year, now.month, now.day, 23, 59, 59);
         break;
       case 'Weekly':
-        startDate = now.subtract(Duration(days: now.weekday - 1));
-        startDate = DateTime(startDate.year, startDate.month, startDate.day);
+        startDate =
+            now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(
+            startDate.year, startDate.month, startDate.day);
         break;
       case 'Monthly':
         startDate = DateTime(now.year, now.month, 1);
@@ -101,27 +112,43 @@ class _ReportPageState extends State<ReportPage> {
         startDate = DateTime(now.year, 1, 1);
         break;
       case 'Custom':
-        if (_customStartDate == null || _customEndDate == null) {
+        if (_customStartDate == null ||
+            _customEndDate == null) {
           setState(() => _isLoading = false);
           return;
         }
+
+        if (_customEndDate!.isBefore(_customStartDate!)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'End date must be after start date.'),
+              ),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+
         startDate = _customStartDate!;
-        endDate = _customEndDate!.add(const Duration(hours: 23, minutes: 59));
+        endDate = _customEndDate!
+            .add(const Duration(hours: 23, minutes: 59));
         break;
       default:
         startDate = now;
         break;
     }
 
-    final incomeTransactions =
-        await _fetchTransactions('income', startDate, endDate);
-    final expenseTransactions =
-        await _fetchTransactions('expenses', startDate, endDate);
+    final incomeTransactions = await _fetchTransactions(
+        'income', startDate, endDate);
+    final expenseTransactions = await _fetchTransactions(
+        'expenses', startDate, endDate);
 
-    double totalIncome =
-        incomeTransactions.fold(0.0, (sum, tx) => sum + tx['amount']);
-    double totalExpense =
-        expenseTransactions.fold(0.0, (sum, tx) => sum + tx['amount']);
+    double totalIncome = incomeTransactions.fold(
+        0.0, (sum, tx) => sum + tx['amount']);
+    double totalExpense = expenseTransactions.fold(
+        0.0, (sum, tx) => sum + tx['amount']);
 
     Map<String, double> categoryExpenses = {};
     Map<String, double> dateWiseSummary = {};
@@ -129,11 +156,14 @@ class _ReportPageState extends State<ReportPage> {
     for (var tx in expenseTransactions) {
       final category = tx['category'] ?? 'Uncategorized';
       final amount = tx['amount'];
-      final date = DateFormat('dd-MM-yyyy').format(tx['date']);
+      final date =
+          DateFormat('dd-MM-yyyy').format(tx['date']);
 
-      categoryExpenses.update(category, (value) => value + amount,
+      categoryExpenses.update(
+          category, (value) => value + amount,
           ifAbsent: () => amount);
-      dateWiseSummary.update(date, (value) => value + amount,
+      dateWiseSummary.update(
+          date, (value) => value + amount,
           ifAbsent: () => amount);
     }
 
@@ -148,7 +178,8 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  Future<void> _selectCustomDate(BuildContext context, bool isStart) async {
+  Future<void> _selectCustomDate(
+      BuildContext context, bool isStart) async {
     DateTime initialDate = DateTime.now();
     DateTime firstDate = DateTime(2000);
     DateTime lastDate = DateTime.now();
@@ -158,18 +189,6 @@ class _ReportPageState extends State<ReportPage> {
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.blue,
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -180,13 +199,16 @@ class _ReportPageState extends State<ReportPage> {
           _customEndDate = picked;
         }
       });
-      if (_customStartDate != null && _customEndDate != null) {
+      if (_customStartDate != null &&
+          _customEndDate != null) {
         _fetchReportData();
       }
     }
   }
 
   Future<void> _exportReport() async {
+    if (_isExporting) return;
+
     if (_selectedReportFormat == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -197,27 +219,53 @@ class _ReportPageState extends State<ReportPage> {
       return;
     }
 
-    var status = await Permission.storage.request();
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Storage permission is required to save the file.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    setState(() => _isExporting = true);
 
     try {
-      Directory directory;
       if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-      } else {
-        directory = await getApplicationDocumentsDirectory();
+        final androidInfo =
+            await DeviceInfoPlugin().androidInfo;
+        if (androidInfo.version.sdkInt < 33) {
+          final status = await Permission.storage.request();
+          if (!status.isGranted) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Storage permission is required to save the file.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+        }
       }
 
+      Directory directory;
+      if (Platform.isAndroid) {
+        final androidInfo =
+            await DeviceInfoPlugin().androidInfo;
+        if (androidInfo.version.sdkInt < 33) {
+          directory =
+              Directory('/storage/emulated/0/Download');
+        } else {
+          directory =
+              await getApplicationDocumentsDirectory();
+        }
+      } else {
+        directory =
+            await getApplicationDocumentsDirectory();
+      }
+
+      final timestamp = DateFormat('yyyyMMdd_HHmm')
+          .format(DateTime.now());
+      final sanitizedType =
+          _selectedReportType.toLowerCase();
+      final extension =
+          _selectedReportFormat!.toLowerCase();
       final String filePath =
-          '${directory.path}/FinancialReport.${_selectedReportFormat!.toLowerCase()}';
+          '${directory.path}/Report_${sanitizedType}_$timestamp.$extension';
 
       if (_selectedReportFormat == 'PDF') {
         await _generatePdfReport(filePath);
@@ -241,11 +289,16 @@ class _ReportPageState extends State<ReportPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to export report: $e'),
+          const SnackBar(
+            content: Text(
+                'Failed to export report. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
       }
     }
   }
@@ -259,32 +312,41 @@ class _ReportPageState extends State<ReportPage> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Financial Report ($_selectedReportType)',
+              pw.Text(
+                  'Financial Report ($_selectedReportType)',
                   style: pw.TextStyle(
-                      fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 20),
               pw.Text('Summary',
                   style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold)),
               pw.Divider(),
-              pw.Text('Total Income: ₹${_totalIncome.toStringAsFixed(2)}'),
-              pw.Text('Total Expense: ₹${_totalExpense.toStringAsFixed(2)}'),
+              pw.Text(
+                  'Total Income: ₹${_totalIncome.toStringAsFixed(2)}'),
+              pw.Text(
+                  'Total Expense: ₹${_totalExpense.toStringAsFixed(2)}'),
               pw.Text(
                   'Net Balance: ₹${(_totalIncome - _totalExpense).toStringAsFixed(2)}'),
               pw.SizedBox(height: 20),
               pw.Text('Expenses by Category',
                   style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold)),
               pw.Divider(),
               ..._categoryExpenses.entries.map((entry) =>
-                  pw.Text('${entry.key}: ₹${entry.value.toStringAsFixed(2)}')),
+                  pw.Text(
+                      '${entry.key}: ₹${entry.value.toStringAsFixed(2)}')),
               pw.SizedBox(height: 20),
               pw.Text('Date-wise Summary',
                   style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold)),
               pw.Divider(),
               ..._dateWiseSummary.entries.map((entry) =>
-                  pw.Text('${entry.key}: ₹${entry.value.toStringAsFixed(2)}')),
+                  pw.Text(
+                      '${entry.key}: ₹${entry.value.toStringAsFixed(2)}')),
             ],
           );
         },
@@ -300,7 +362,8 @@ class _ReportPageState extends State<ReportPage> {
 
     rows.add(['Financial Report (${_selectedReportType})']);
     rows.add(['Summary']);
-    rows.add(['Total Income', 'Total Expense', 'Net Balance']);
+    rows.add(
+        ['Total Income', 'Total Expense', 'Net Balance']);
     rows.add([
       '₹${_totalIncome.toStringAsFixed(2)}',
       '₹${_totalExpense.toStringAsFixed(2)}',
@@ -351,11 +414,14 @@ class _ReportPageState extends State<ReportPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('Select Report Type',
-                  style: Theme.of(context).textTheme.titleMedium),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _selectedReportType,
-                style: TextStyle(color: colorScheme.onSurface),
+                style:
+                    TextStyle(color: colorScheme.onSurface),
                 dropdownColor: colorScheme.surface,
                 items: _reportTypes
                     .map((type) => DropdownMenuItem(
@@ -373,7 +439,9 @@ class _ReportPageState extends State<ReportPage> {
                 },
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                  fillColor: colorScheme
+                      .surfaceContainerHighest
+                      .withOpacity(0.3),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -396,7 +464,8 @@ class _ReportPageState extends State<ReportPage> {
                     ),
                   ),
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                 ),
               ),
               if (_selectedReportType == 'Custom') ...[
@@ -405,27 +474,33 @@ class _ReportPageState extends State<ReportPage> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () => _selectCustomDate(context, true),
+                        onPressed: () => _selectCustomDate(
+                            context, true),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
+                          backgroundColor:
+                              colorScheme.primary,
+                          foregroundColor:
+                              colorScheme.onPrimary,
                         ),
                         child: Text(_customStartDate == null
                             ? 'Select Start Date'
-                            : 'Start: ${_customStartDate!.toLocal().toString().split(' ')[0]}'),
+                            : 'Start: ${DateFormat.yMd().format(_customStartDate!)}'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () => _selectCustomDate(context, false),
+                        onPressed: () => _selectCustomDate(
+                            context, false),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
+                          backgroundColor:
+                              colorScheme.primary,
+                          foregroundColor:
+                              colorScheme.onPrimary,
                         ),
                         child: Text(_customEndDate == null
                             ? 'Select End Date'
-                            : 'End: ${_customEndDate!.toLocal().toString().split(' ')[0]}'),
+                            : 'End: ${DateFormat.yMd().format(_customEndDate!)}'),
                       ),
                     ),
                   ],
@@ -434,11 +509,14 @@ class _ReportPageState extends State<ReportPage> {
               ],
               const SizedBox(height: 20),
               Text('Select Format',
-                  style: Theme.of(context).textTheme.titleMedium),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _selectedReportFormat,
-                style: TextStyle(color: colorScheme.onSurface),
+                style:
+                    TextStyle(color: colorScheme.onSurface),
                 dropdownColor: colorScheme.surface,
                 items: _reportFormats
                     .map((format) => DropdownMenuItem(
@@ -453,7 +531,9 @@ class _ReportPageState extends State<ReportPage> {
                 },
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                  fillColor: colorScheme
+                      .surfaceContainerHighest
+                      .withOpacity(0.3),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -476,40 +556,60 @@ class _ReportPageState extends State<ReportPage> {
                     ),
                   ),
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                 ),
               ),
               const SizedBox(height: 30),
               if (_isLoading)
-                const Center(child: CircularProgressIndicator())
+                const Center(
+                    child: CircularProgressIndicator())
               else
                 Card(
                   color: colorScheme.surface,
                   elevation: 4,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                      borderRadius:
+                          BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
-                        Text('Report Summary ($_selectedReportType)',
-                            style: Theme.of(context).textTheme.titleLarge),
+                        Text(
+                            'Report Summary ($_selectedReportType)',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge),
                         const Divider(height: 20),
                         Text(
                           'Total Income: ₹${_totalIncome.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              color: Colors.green,
+                          style: TextStyle(
+                              color: Colors.green.shade600,
                               fontSize: 16,
                               fontWeight: FontWeight.w600),
                         ),
                         Text(
                           'Total Expense: ₹${_totalExpense.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              color: Colors.red,
+                          style: TextStyle(
+                              color: colorScheme.error,
                               fontSize: 16,
                               fontWeight: FontWeight.w600),
                         ),
+                        if (_totalIncome == 0 &&
+                            _totalExpense == 0)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                                top: 12),
+                            child: Text(
+                              'No transactions found for this period.',
+                              style: TextStyle(
+                                  color:
+                                      colorScheme.outline),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                         const SizedBox(height: 10),
                         Text(
                           'Net Balance: ₹${(_totalIncome - _totalExpense).toStringAsFixed(2)}',
@@ -520,60 +620,90 @@ class _ReportPageState extends State<ReportPage> {
                         ),
                         const SizedBox(height: 20),
                         Text('Expenses by Category:',
-                            style: Theme.of(context).textTheme.titleMedium),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium),
                         const SizedBox(height: 10),
-                        ..._categoryExpenses.entries.map((entry) => Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 2.0),
-                              child: Text(
-                                '${entry.key}: ₹${entry.value.toStringAsFixed(2)}',
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            )),
+                        ..._categoryExpenses.entries
+                            .map((entry) => Padding(
+                                  padding: const EdgeInsets
+                                      .symmetric(
+                                      vertical: 2.0),
+                                  child: Text(
+                                    '${entry.key}: ₹${entry.value.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        fontSize: 14),
+                                  ),
+                                )),
                         const SizedBox(height: 20),
                         Text('Date-wise Summary:',
-                            style: Theme.of(context).textTheme.titleMedium),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium),
                         const SizedBox(height: 10),
-                        ..._dateWiseSummary.entries.map((entry) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 6, horizontal: 8),
-                              margin: const EdgeInsets.symmetric(vertical: 2),
-                              decoration: BoxDecoration(
-                                color:
-                                    colorScheme.surfaceVariant.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${entry.key}: ₹${entry.value.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                            )),
+                        ..._dateWiseSummary.entries
+                            .map((entry) => Container(
+                                  padding: const EdgeInsets
+                                      .symmetric(
+                                      vertical: 6,
+                                      horizontal: 8),
+                                  margin: const EdgeInsets
+                                      .symmetric(
+                                      vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme
+                                        .surfaceContainerHighest
+                                        .withOpacity(0.3),
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(8),
+                                  ),
+                                  child: Text(
+                                    '${entry.key}: ₹${entry.value.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colorScheme
+                                          .onSurface,
+                                    ),
+                                  ),
+                                )),
                       ],
                     ),
                   ),
                 ),
               const SizedBox(height: 30),
               ElevatedButton(
-                onPressed: _exportReport,
+                onPressed:
+                    _isExporting ? null : _exportReport,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 15),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(
-                  'Export',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onPrimary,
-                  ),
-                ),
+                child: _isExporting
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(
+                            colorScheme.onPrimary,
+                          ),
+                        ),
+                      )
+                    : Text(
+                        'Export',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onPrimary,
+                        ),
+                      ),
               ),
             ],
           ),

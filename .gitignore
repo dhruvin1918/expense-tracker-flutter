@@ -46,3 +46,8 @@ app.*.map.json
 
 .vscode/
 *.lock
+
+# Environment files
+.env
+.env.*
+!.env.example

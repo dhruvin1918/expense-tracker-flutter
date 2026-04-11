@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class TransactionService {
-
   // DELETE TRANSACTION
   static Future<void> deleteTransaction({
     required String transactionId,
@@ -11,7 +10,10 @@ class TransactionService {
     required String type, // income / expense
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      throw StateError(
+          'User must be authenticated to delete a transaction.');
+    }
 
     final walletRef = FirebaseFirestore.instance
         .collection('users')
@@ -22,12 +24,15 @@ class TransactionService {
     final transactionRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .collection(type == 'income' ? 'income' : 'expenses')
+        .collection(
+            type == 'income' ? 'income' : 'expenses')
         .doc(transactionId);
 
-    await FirebaseFirestore.instance.runTransaction((tx) async {
+    await FirebaseFirestore.instance
+        .runTransaction((tx) async {
       final walletSnap = await tx.get(walletRef);
-      final currentBalance = (walletSnap['balance'] ?? 0).toDouble();
+      final currentBalance =
+          (walletSnap['balance'] ?? 0).toDouble();
 
       final newBalance = type == 'income'
           ? currentBalance - amount
@@ -48,7 +53,10 @@ class TransactionService {
     required String type, // income / expense
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      throw StateError(
+          'User must be authenticated to update a transaction.');
+    }
 
     final walletRef = FirebaseFirestore.instance
         .collection('users')
@@ -59,18 +67,23 @@ class TransactionService {
     final transactionRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .collection(type == 'income' ? 'income' : 'expenses')
+        .collection(
+            type == 'income' ? 'income' : 'expenses')
         .doc(transactionId);
 
-    await FirebaseFirestore.instance.runTransaction((tx) async {
+    await FirebaseFirestore.instance
+        .runTransaction((tx) async {
       final walletSnap = await tx.get(walletRef);
-      final currentBalance = (walletSnap['balance'] ?? 0).toDouble();
+      final currentBalance =
+          (walletSnap['balance'] ?? 0).toDouble();
 
       double updatedBalance;
       if (type == 'income') {
-        updatedBalance = currentBalance - oldAmount + newAmount;
+        updatedBalance =
+            currentBalance - oldAmount + newAmount;
       } else {
-        updatedBalance = currentBalance + oldAmount - newAmount;
+        updatedBalance =
+            currentBalance + oldAmount - newAmount;
       }
 
       tx.update(walletRef, {'balance': updatedBalance});

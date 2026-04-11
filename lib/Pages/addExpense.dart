@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 class Addexpense extends StatefulWidget {
@@ -20,6 +21,7 @@ class _AddexpenseState extends State<Addexpense> {
   DateTime _selectedDate = DateTime.now();
   List<String> _categories = [];
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -53,7 +55,9 @@ class _AddexpenseState extends State<Addexpense> {
 
       if (mounted) {
         setState(() {
-          _categories = snapshot.docs.map((d) => d['name'] as String).toList();
+          _categories = snapshot.docs
+              .map((d) => d['name'] as String)
+              .toList();
           _isLoading = false;
         });
       }
@@ -69,7 +73,7 @@ class _AddexpenseState extends State<Addexpense> {
       context: context,
       initialDate: now,
       firstDate: DateTime(now.year - 5),
-      lastDate: now,
+      lastDate: now.add(const Duration(days: 7)),
     );
 
     if (picked != null && mounted) {
@@ -79,12 +83,22 @@ class _AddexpenseState extends State<Addexpense> {
 
   void _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSaving) return;
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Please sign in before adding expenses.')),
+      );
+      return;
+    }
 
     try {
-      final expenseAmount = double.parse(_amountController.text);
+      setState(() => _isSaving = true);
+      final expenseAmount =
+          double.parse(_amountController.text);
 
       final walletRef = FirebaseFirestore.instance
           .collection('users')
@@ -104,11 +118,13 @@ class _AddexpenseState extends State<Addexpense> {
           .collection('transactions')
           .doc(); // <-- create doc reference
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+      await FirebaseFirestore.instance
+          .runTransaction((transaction) async {
         final walletSnap = await transaction.get(walletRef);
 
-        final currentBalance =
-            walletSnap.exists ? (walletSnap['balance'] ?? 0).toDouble() : 0.0;
+        final currentBalance = walletSnap.exists
+            ? (walletSnap['balance'] ?? 0).toDouble()
+            : 0.0;
 
         // Optional safety check
         if (currentBalance < expenseAmount) {
@@ -135,6 +151,7 @@ class _AddexpenseState extends State<Addexpense> {
         transaction.set(transactionRef, {
           'type': 'expense',
           'amount': expenseAmount,
+          'category': _selectedCategory,
           'description': _descriptionController.text.trim(),
           'wallet': _selectedWallet,
           'date': Timestamp.fromDate(_selectedDate),
@@ -146,25 +163,39 @@ class _AddexpenseState extends State<Addexpense> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Expense added successfully!'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
+          content:
+              const Text('Expense added successfully!'),
+          backgroundColor: Colors.green.shade600,
         ),
       );
 
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
+      final message = e
+              .toString()
+              .toLowerCase()
+              .contains('insufficient')
+          ? 'Insufficient balance in selected wallet.'
+          : 'Failed to save expense. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(message)),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
-  InputDecoration _fieldDecoration(BuildContext context, String label) {
+  InputDecoration _fieldDecoration(
+      BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      fillColor: colorScheme.surfaceContainerHighest
+          .withOpacity(0.3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -174,9 +205,11 @@ class _AddexpenseState extends State<Addexpense> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        borderSide: BorderSide(
+            color: colorScheme.primary, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+      contentPadding: const EdgeInsets.symmetric(
+          vertical: 18, horizontal: 20),
     );
   }
 
@@ -205,7 +238,13 @@ class _AddexpenseState extends State<Addexpense> {
                       TextFormField(
                         controller: _amountController,
                         keyboardType: TextInputType.number,
-                        decoration: _fieldDecoration(context, 'Amount')
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                        ],
+                        decoration: _fieldDecoration(
+                                context, 'Amount')
                             .copyWith(prefixText: '₹ '),
                         validator: (v) {
                           if (v == null ||
@@ -219,16 +258,31 @@ class _AddexpenseState extends State<Addexpense> {
 
                       const SizedBox(height: 20),
 
+                      if (_categories.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              bottom: 20),
+                          child: Text(
+                            'No categories found. Add categories first.',
+                            style: TextStyle(
+                                color: colorScheme.error),
+                          ),
+                        ),
+
                       // Category
                       DropdownButtonFormField<String>(
                         value: _selectedCategory,
-                        decoration: _fieldDecoration(context, 'Category'),
+                        decoration: _fieldDecoration(
+                            context, 'Category'),
                         items: _categories
-                            .map((c) =>
-                                DropdownMenuItem(value: c, child: Text(c)))
+                            .map((c) => DropdownMenuItem(
+                                value: c, child: Text(c)))
                             .toList(),
-                        onChanged: (v) => setState(() => _selectedCategory = v),
-                        validator: (v) => v == null ? 'Select category' : null,
+                        onChanged: (v) => setState(
+                            () => _selectedCategory = v),
+                        validator: (v) => v == null
+                            ? 'Select category'
+                            : null,
                       ),
 
                       const SizedBox(height: 20),
@@ -236,14 +290,21 @@ class _AddexpenseState extends State<Addexpense> {
                       // Wallet
                       DropdownButtonFormField<String>(
                         value: _selectedWallet,
-                        decoration: _fieldDecoration(context, 'Payment Source'),
+                        decoration: _fieldDecoration(
+                            context, 'Payment Source'),
                         items: const [
-                          DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                          DropdownMenuItem(value: 'bank', child: Text('Bank')),
                           DropdownMenuItem(
-                              value: 'credit', child: Text('Credit Card')),
+                              value: 'cash',
+                              child: Text('Cash')),
+                          DropdownMenuItem(
+                              value: 'bank',
+                              child: Text('Bank')),
+                          DropdownMenuItem(
+                              value: 'credit',
+                              child: Text('Credit Card')),
                         ],
-                        onChanged: (v) => setState(() => _selectedWallet = v!),
+                        onChanged: (v) => setState(
+                            () => _selectedWallet = v!),
                       ),
 
                       const SizedBox(height: 20),
@@ -251,24 +312,43 @@ class _AddexpenseState extends State<Addexpense> {
                       // Description
                       TextFormField(
                         controller: _descriptionController,
-                        decoration: _fieldDecoration(context, 'Description'),
+                        maxLength: 100,
+                        decoration: _fieldDecoration(
+                            context, 'Description'),
                       ),
 
                       const SizedBox(height: 20),
 
                       // Date
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Date: ${DateFormat.yMd().format(_selectedDate)}',
-                          ),
-                          TextButton.icon(
-                            onPressed: _presentDatePicker,
-                            icon: const Icon(Icons.calendar_today),
-                            label: const Text('Select Date'),
-                          ),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: colorScheme
+                              .surfaceContainerHighest
+                              .withOpacity(0.3),
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          border: Border.all(
+                              color: colorScheme.outline),
+                        ),
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .spaceBetween,
+                          children: [
+                            Text(
+                              'Date: ${DateFormat.yMd().format(_selectedDate)}',
+                            ),
+                            TextButton.icon(
+                              onPressed: _presentDatePicker,
+                              icon: const Icon(
+                                  Icons.calendar_today),
+                              label:
+                                  const Text('Select Date'),
+                            ),
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 40),
@@ -277,14 +357,30 @@ class _AddexpenseState extends State<Addexpense> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _saveExpense,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text(
-                              'Save Expense',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
+                          onPressed: _isSaving
+                              ? null
+                              : _saveExpense,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(
+                                    vertical: 14),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child:
+                                        CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Save Expense',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight:
+                                            FontWeight
+                                                .bold),
+                                  ),
                           ),
                         ),
                       ),
