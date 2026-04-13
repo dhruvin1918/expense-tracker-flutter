@@ -51,6 +51,47 @@ class _AddincomeState extends State<Addincome> {
     }
   }
 
+  Future<void> _loadDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _selectedWallet = prefs.getString('default_income_wallet') ?? 'cash';
+    });
+  }
+
+  Future<void> _saveDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('default_income_wallet', _selectedWallet);
+  }
+
+  Future<void> _undoIncome({
+    required String userId,
+    required double amount,
+    required String wallet,
+    required String incomeId,
+    required String transactionId,
+  }) async {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
+    final walletRef = userRef.collection('wallets').doc(wallet);
+    final incomeRef = userRef.collection('income').doc(incomeId);
+    final transactionRef =
+        userRef.collection('transactions').doc(transactionId);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final walletSnap = await transaction.get(walletRef);
+      final currentBalance =
+          walletSnap.exists ? (walletSnap['balance'] ?? 0).toDouble() : 0.0;
+
+      transaction.set(
+        walletRef,
+        {'balance': currentBalance - amount},
+        SetOptions(merge: true),
+      );
+      transaction.delete(incomeRef);
+      transaction.delete(transactionRef);
+    });
+  }
+
   void _saveIncome() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isSaving) return;
@@ -83,7 +124,7 @@ class _AddincomeState extends State<Addincome> {
           .collection('users')
           .doc(user.uid)
           .collection('transactions')
-          .doc(); // <-- create doc reference
+          .doc();
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final walletSnap = await transaction.get(walletRef);
@@ -150,74 +191,6 @@ class _AddincomeState extends State<Addincome> {
         setState(() => _isSaving = false);
       }
     }
-  }
-
-  Future<void> _loadDefaults() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _selectedWallet = prefs.getString('default_income_wallet') ?? 'cash';
-    });
-  }
-
-  Future<void> _saveDefaults() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('default_income_wallet', _selectedWallet);
-  }
-
-  Future<void> _undoIncome({
-    required String userId,
-    required double amount,
-    required String wallet,
-    required String incomeId,
-    required String transactionId,
-  }) async {
-    final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
-    final walletRef = userRef.collection('wallets').doc(wallet);
-    final incomeRef = userRef.collection('income').doc(incomeId);
-    final transactionRef =
-        userRef.collection('transactions').doc(transactionId);
-
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final walletSnap = await transaction.get(walletRef);
-      final currentBalance =
-          walletSnap.exists ? (walletSnap['balance'] ?? 0).toDouble() : 0.0;
-
-      transaction.set(
-        walletRef,
-        {'balance': currentBalance - amount},
-        SetOptions(merge: true),
-      );
-      transaction.delete(incomeRef);
-      transaction.delete(transactionRef);
-    });
-  }
-
-  InputDecoration _fieldDecoration(BuildContext context, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: colorScheme.primary,
-          width: 2,
-        ),
-      ),
-      contentPadding: const EdgeInsets.symmetric(
-        vertical: 18,
-        horizontal: 20,
-      ),
-    );
   }
 
   @override
@@ -353,14 +326,24 @@ class _AddincomeState extends State<Addincome> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _selectedWallet,
+                          dropdownColor: Colors.white,
+                          style: const TextStyle(
+                              color: Colors.black87, fontSize: 15),
+                          iconEnabledColor: Colors.black54,
                           isExpanded: true,
                           items: const [
                             DropdownMenuItem(
-                                value: 'cash', child: Text('Cash')),
+                                value: 'cash',
+                                child: Text('Cash',
+                                    style: TextStyle(color: Colors.black87))),
                             DropdownMenuItem(
-                                value: 'bank', child: Text('Bank')),
+                                value: 'bank',
+                                child: Text('Bank',
+                                    style: TextStyle(color: Colors.black87))),
                             DropdownMenuItem(
-                                value: 'credit', child: Text('Credit Card')),
+                                value: 'credit',
+                                child: Text('Credit Card',
+                                    style: TextStyle(color: Colors.black87))),
                           ],
                           onChanged: (value) {
                             setState(() => _selectedWallet = value!);
@@ -379,7 +362,8 @@ class _AddincomeState extends State<Addincome> {
                         label: 'Date',
                         child: Text(
                           DateFormat('EEE, MMM d yyyy').format(_selectedDate),
-                          style: const TextStyle(fontSize: 15),
+                          style: const TextStyle(
+                              fontSize: 15, color: Colors.black87),
                         ),
                         trailing: const Icon(Icons.chevron_right,
                             color: Colors.grey, size: 20),
@@ -394,8 +378,11 @@ class _AddincomeState extends State<Addincome> {
                       child: TextField(
                         controller: _descriptionController,
                         maxLength: 100,
+                        style: const TextStyle(
+                            color: Colors.black87, fontSize: 15),
                         decoration: const InputDecoration(
                           hintText: 'Add a note...',
+                          hintStyle: TextStyle(color: Colors.black54),
                           border: InputBorder.none,
                           counterText: '',
                           isDense: true,
@@ -463,7 +450,7 @@ class _FieldTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(14),
         color: Colors.white,
       ),
@@ -485,9 +472,12 @@ class _FieldTile extends StatelessWidget {
               children: [
                 Text(label,
                     style:
-                        TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                 const SizedBox(height: 2),
-                child,
+                DefaultTextStyle.merge(
+                  style: const TextStyle(color: Colors.black87),
+                  child: child,
+                ),
               ],
             ),
           ),
