@@ -109,7 +109,7 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Category total (₹$totalCategory) exceeds Monthly Budget (₹$monthlyBudget)'),
+                'Category total (₹${totalCategory.toStringAsFixed(2)}) exceeds Monthly Budget (₹${monthlyBudget.toStringAsFixed(2)})'),
           ),
         );
         setState(() => _isLoading = false);
@@ -136,9 +136,12 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint('Budget save error: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e')),
+        const SnackBar(
+            content: Text(
+                'Failed to save budget. Please try again.')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -153,15 +156,8 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(
-          'Set Your Budget',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.onPrimary,
-          ),
-        ),
+        title: const Text('Set Your Budget'),
         centerTitle: true,
-        backgroundColor: colorScheme.primary,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -170,75 +166,59 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
               child: Form(
                 key: _formKey,
                 child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
-                    // 🔹 Monthly Budget
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 20),
-                      child: TextFormField(
-                        controller:
-                            _monthlyBudgetController,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(
-                            color: colorScheme.onSurface),
-                        decoration: InputDecoration(
-                          labelText: 'Monthly Total Budget',
-                          labelStyle: TextStyle(
-                              color: colorScheme.outline),
-                          prefixText: '₹',
-                          prefixStyle: TextStyle(
-                              color: colorScheme.onSurface),
-                          filled: true,
-                          fillColor: colorScheme
-                              .surfaceVariant
-                              .withOpacity(0.3),
-                          border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.outline,
-                              width: 1,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.error,
-                              width: 1,
-                            ),
-                          ),
-                          focusedErrorBorder:
-                              OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.error,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null ||
-                              value.isEmpty ||
-                              double.tryParse(value) ==
-                                  null ||
-                              double.parse(value) <= 0) {
-                            return 'Please enter a valid amount.';
-                          }
-                          return null;
-                        },
+                    Text(
+                      'Plan monthly and category limits',
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Set a monthly budget first, then split it by category.',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(
+                        color: colorScheme.outline,
                       ),
                     ),
-                    const Divider(),
+                    const SizedBox(height: 16),
+
+                    // 🔹 Monthly Budget
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: TextFormField(
+                          controller:
+                              _monthlyBudgetController,
+                          keyboardType:
+                              TextInputType.number,
+                          style: TextStyle(
+                              color: colorScheme.onSurface),
+                          decoration: InputDecoration(
+                            labelText:
+                                'Monthly Total Budget',
+                            prefixText: '₹ ',
+                            prefixIcon: const Icon(Icons
+                                .account_balance_wallet_outlined),
+                            filled: true,
+                            fillColor: colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.3),
+                          ),
+                          validator: (value) {
+                            if (value == null ||
+                                value.isEmpty ||
+                                double.tryParse(value) ==
+                                    null ||
+                                double.parse(value) <= 0) {
+                              return 'Please enter a valid amount.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       'Category Budgets',
                       style: TextStyle(
@@ -279,8 +259,8 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
                                         .onSurface),
                                 filled: true,
                                 fillColor: colorScheme
-                                    .surfaceVariant
-                                    .withOpacity(0.3),
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 border: OutlineInputBorder(
                                   borderRadius:
                                       BorderRadius.circular(
@@ -383,9 +363,9 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
                               style:
                                   ElevatedButton.styleFrom(
                                 backgroundColor: colorScheme
-                                    .surfaceVariant,
-                                foregroundColor: colorScheme
-                                    .onSurfaceVariant,
+                                    .surfaceContainerHighest,
+                                foregroundColor:
+                                    colorScheme.onSurface,
                                 padding: const EdgeInsets
                                     .symmetric(
                                     vertical: 15),
@@ -400,8 +380,8 @@ class _SetBudgetPageState extends State<SetBudgetPage> {
                                 'Cancel',
                                 style: TextStyle(
                                   fontSize: 18,
-                                  color: colorScheme
-                                      .onSurfaceVariant,
+                                  color:
+                                      colorScheme.onSurface,
                                 ),
                               ),
                             ),

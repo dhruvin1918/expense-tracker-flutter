@@ -17,8 +17,8 @@ class CustomScaffold extends StatelessWidget {
     return Scaffold(
       appBar: showAppBar
           ? AppBar(
-              iconTheme:
-                  IconThemeData(color: colorScheme.onSurface),
+              iconTheme: IconThemeData(
+                  color: colorScheme.onSurface),
               backgroundColor: Colors.transparent,
             )
           : null,
@@ -34,8 +34,11 @@ class CustomScaffold extends StatelessWidget {
             errorBuilder: (context, error, stackTrace) =>
                 Container(color: colorScheme.surface),
           ),
-          if (Theme.of(context).brightness == Brightness.dark)
-            Container(color: Colors.black.withOpacity(0.45)),
+          if (Theme.of(context).brightness ==
+              Brightness.dark)
+            Container(
+                color:
+                    Colors.black.withValues(alpha: 0.45)),
           SafeArea(child: child),
         ],
       ),

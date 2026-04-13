@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
+  static final _googleSignIn = GoogleSignIn();
+
   static Future<void> signOut() async {
     try {
       if (kIsWeb) {
         await FirebaseAuth.instance.signOut();
       } else {
-        await GoogleSignIn().signOut();
+        await _googleSignIn.signOut();
         await FirebaseAuth.instance.signOut();
       }
     } catch (e) {

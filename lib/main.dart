@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:practice/providers/theme_provider.dart';
+import 'package:practice/services/background_service.dart';
+import 'package:practice/services/notification_service.dart';
 import 'package:practice/themes/theme.dart';
 import 'package:practice/widgets/wrapper.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +59,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
       }
 
       if (!kIsWeb) {
-        FirebaseFirestore.instance.settings = const Settings(
+        FirebaseFirestore.instance.settings =
+            const Settings(
           persistenceEnabled: true,
         );
       }
@@ -63,6 +68,25 @@ class _AppBootstrapState extends State<AppBootstrap> {
       final themeProvider = ThemeProvider();
       await themeProvider.loadThemePreference();
       _themeProvider = themeProvider;
+
+      if (!kIsWeb) {
+        await NotificationService.initialize();
+        await NotificationService.requestPermission();
+        await BackgroundService
+            .requestBatteryOptimizationExemption();
+        await BackgroundService.initialize();
+
+        final prefs = await SharedPreferences.getInstance();
+        final alertEnabled =
+            prefs.getBool('budgetAlertEnabled') ?? false;
+        if (alertEnabled) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await BackgroundService.registerPeriodicTask(
+                user.uid);
+          }
+        }
+      }
     } catch (e) {
       _initError = e.toString();
       debugPrint('Firebase init failed: $e');

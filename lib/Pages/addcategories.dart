@@ -15,6 +15,10 @@ class _AddcategoriesState extends State<Addcategories> {
       TextEditingController();
   bool _isAdding = false;
 
+  bool get _canAddCategory =>
+      !_isAdding &&
+      _categoryController.text.trim().isNotEmpty;
+
   String _normalizeCategoryName(String input) {
     final text = input.trim();
     if (text.isEmpty) return text;
@@ -54,7 +58,7 @@ class _AddcategoriesState extends State<Addcategories> {
         return;
       }
 
-      await categoriesRef.add({
+      final createdDoc = await categoriesRef.add({
         'name': normalized,
         'timestamp': FieldValue.serverTimestamp(),
       });
@@ -63,8 +67,15 @@ class _AddcategoriesState extends State<Addcategories> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Category added successfully.'),
+        SnackBar(
+          content:
+              const Text('Category added successfully.'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              categoriesRef.doc(createdDoc.id).delete();
+            },
+          ),
         ),
       );
     } catch (e) {
@@ -116,16 +127,29 @@ class _AddcategoriesState extends State<Addcategories> {
     if (confirmed != true) return;
 
     try {
-      await FirebaseFirestore.instance
+      final categoryRef = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('categories')
-          .doc(docId)
-          .delete();
+          .doc(docId);
+
+      final beforeDelete = await categoryRef.get();
+      final deletedData = beforeDelete.data();
+
+      await categoryRef.delete();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"$categoryName" deleted.')),
+        SnackBar(
+          content: Text('"$categoryName" deleted.'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              if (deletedData == null) return;
+              categoryRef.set(deletedData);
+            },
+          ),
+        ),
       );
     } catch (e) {
       debugPrint('Delete category error: $e');
@@ -137,6 +161,14 @@ class _AddcategoriesState extends State<Addcategories> {
         ),
       );
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -155,7 +187,7 @@ class _AddcategoriesState extends State<Addcategories> {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          'Add Categories',
+          'Manage Categories',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             color: colorScheme.onPrimary,
@@ -167,84 +199,102 @@ class _AddcategoriesState extends State<Addcategories> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _categoryController,
-                    maxLength: 30,
-                    style: TextStyle(
-                        color: colorScheme.onSurface),
-                    decoration: InputDecoration(
-                      hintText: 'Enter category name',
-                      hintStyle: TextStyle(
-                          color: colorScheme.outline),
-                      filled: true,
-                      fillColor: colorScheme
-                          .surfaceContainerHighest
-                          .withOpacity(0.3),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(15),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(15),
-                        borderSide: BorderSide(
-                          color: colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                      prefixIcon: Icon(Icons.category,
-                          color: colorScheme.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                CircleAvatar(
-                  backgroundColor: colorScheme.primary,
-                  child: IconButton(
-                    icon: _isAdding
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child:
-                                CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<
-                                      Color>(
-                                colorScheme.onPrimary,
-                              ),
-                            ),
-                          )
-                        : Icon(Icons.add,
-                            color: colorScheme.onPrimary),
-                    onPressed:
-                        _isAdding ? null : _addCategory,
-                  ),
-                ),
-              ],
+            Text(
+              'Create Category',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'My Categories',
-                style:
-                    theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
+            const SizedBox(height: 8),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _categoryController,
+                      maxLength: 30,
+                      onSubmitted: (_) {
+                        if (_canAddCategory) _addCategory();
+                      },
+                      style: TextStyle(
+                          color: colorScheme.onSurface),
+                      decoration: InputDecoration(
+                        hintText: 'Enter category name',
+                        hintStyle: TextStyle(
+                            color: colorScheme.outline),
+                        filled: true,
+                        fillColor: colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.3),
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: colorScheme.primary,
+                            width: 2,
+                          ),
+                        ),
+                        prefixIcon: Icon(
+                            Icons.category_outlined,
+                            color: colorScheme.primary),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _canAddCategory
+                            ? _addCategory
+                            : null,
+                        icon: _isAdding
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<
+                                          Color>(
+                                    colorScheme.onPrimary,
+                                  ),
+                                ),
+                              )
+                            : const Icon(Icons.add),
+                        label: Text(_isAdding
+                            ? 'Adding...'
+                            : 'Add Category'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             const SizedBox(height: 10),
+            Text(
+              'My Categories',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: user == null
                   ? const Center(
                       child: Text(
-                          '⚠️ Please sign in to add categories.'),
+                          'Please sign in to add categories.'),
                     )
                   : StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -265,7 +315,7 @@ class _AddcategoriesState extends State<Addcategories> {
                         if (snapshot.hasError) {
                           return const Center(
                             child: Text(
-                                '❌ Error loading categories.'),
+                                'Error loading categories.'),
                           );
                         }
 
@@ -275,7 +325,7 @@ class _AddcategoriesState extends State<Addcategories> {
                         if (docs.isEmpty) {
                           return Center(
                             child: Text(
-                              'No categories added yet.\nTap + to add one!',
+                              'No categories added yet.\nUse the form above to add one.',
                               textAlign: TextAlign.center,
                               style: theme
                                   .textTheme.bodyMedium
@@ -304,10 +354,10 @@ class _AddcategoriesState extends State<Addcategories> {
                                     BorderRadius.circular(
                                         12),
                               ),
-                              elevation: 3,
+                              elevation: 1.5,
                               child: ListTile(
                                 leading: Icon(
-                                    Icons.category,
+                                    Icons.label_outline,
                                     color: colorScheme
                                         .primary),
                                 title: Text(
@@ -322,7 +372,8 @@ class _AddcategoriesState extends State<Addcategories> {
                                   ),
                                 ),
                                 trailing: IconButton(
-                                  icon: Icon(Icons.delete,
+                                  icon: Icon(
+                                      Icons.delete_outline,
                                       color: colorScheme
                                           .error),
                                   onPressed: () =>

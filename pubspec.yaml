@@ -22,10 +22,13 @@ dependencies:
   # Auth & Storage
   google_sign_in: ^6.2.1
   shared_preferences: ^2.2.3
+  flutter_local_notifications: ^17.0.0
+  workmanager: ^0.9.0+3
 
   # UI & Icons
   cupertino_icons: ^1.0.8
   font_awesome_flutter: ^10.7.0
+  google_fonts: ^6.2.1
   flutter_signin_button: ^2.1.1
 
   # Utilities
@@ -50,12 +53,19 @@ dev_dependencies:
 
   # App Icon Generator
   flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.3.14
 
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/images/logo.png"
   remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/logo.png
+  android: true
+  ios: true
 
 flutter:
   uses-material-design: true

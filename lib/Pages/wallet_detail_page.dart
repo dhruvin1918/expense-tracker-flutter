@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../services/transaction_service.dart';
 
 class WalletDetailPage extends StatelessWidget {
@@ -14,7 +15,10 @@ class WalletDetailPage extends StatelessWidget {
     required this.walletName,
   });
 
-  void _showActionSheet(BuildContext context, Map<String, dynamic> tx) {
+  void _showActionSheet(
+      BuildContext context, Map<String, dynamic> tx) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet(
       context: context,
       builder: (_) => SafeArea(
@@ -30,7 +34,8 @@ class WalletDetailPage extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
+              leading: Icon(Icons.delete,
+                  color: colorScheme.error),
               title: const Text('Delete'),
               onTap: () {
                 Navigator.pop(context);
@@ -49,55 +54,107 @@ class WalletDetailPage extends StatelessWidget {
     );
   }
 
-  void _showEditDialog(BuildContext context, Map<String, dynamic> tx) {
-    final amountController =
-        TextEditingController(text: tx['amount'].toString());
-    final descController = TextEditingController(text: tx['description']);
+  void _showEditDialog(
+      BuildContext context, Map<String, dynamic> tx) {
+    final amountController = TextEditingController(
+        text: tx['amount'].toString());
+    final descController =
+        TextEditingController(text: tx['description']);
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Edit Transaction'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: 'Description'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newAmount =
-                  double.tryParse(amountController.text) ?? tx['amount'];
+      builder: (dialogContext) {
+        bool isSaving = false;
 
-              await TransactionService.updateTransaction(
-                transactionId: tx['id'],
-                walletId: tx['wallet'],
-                oldAmount: tx['amount'],
-                newAmount: newAmount,
-                description: descController.text,
-                type: tx['type'],
-              );
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Edit Transaction'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Amount'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(
+                      labelText: 'Description'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving
+                    ? null
+                    : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        final newAmount = double.tryParse(
+                            amountController.text);
+                        if (newAmount == null ||
+                            newAmount <= 0) {
+                          ScaffoldMessenger.of(
+                                  dialogContext)
+                              .showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Enter a valid amount.'),
+                            ),
+                          );
+                          return;
+                        }
 
-              Navigator.pop(context);
-            },
-            child: const Text('Update'),
+                        setState(() => isSaving = true);
+                        try {
+                          await TransactionService
+                              .updateTransaction(
+                            transactionId: tx['id'],
+                            walletId: tx['wallet'],
+                            oldAmount: tx['amount'],
+                            newAmount: newAmount,
+                            description:
+                                descController.text,
+                            type: tx['type'],
+                          );
+
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                        } catch (e) {
+                          debugPrint('Update error: $e');
+                          if (dialogContext.mounted) {
+                            ScaffoldMessenger.of(
+                                    dialogContext)
+                                .showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Failed to update. Please try again.',
+                                ),
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (dialogContext.mounted) {
+                            setState(
+                                () => isSaving = false);
+                          }
+                        }
+                      },
+                child: Text(
+                    isSaving ? 'Updating...' : 'Update'),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -112,8 +169,8 @@ class WalletDetailPage extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Transaction'),
-        content:
-            const Text('Are you sure you want to delete this transaction?'),
+        content: const Text(
+            'Are you sure you want to delete this transaction?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -122,13 +179,26 @@ class WalletDetailPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-
-              await TransactionService.deleteTransaction(
-                transactionId: transactionId,
-                walletId: walletId,
-                amount: amount,
-                type: type,
-              );
+              try {
+                await TransactionService.deleteTransaction(
+                  transactionId: transactionId,
+                  walletId: walletId,
+                  amount: amount,
+                  type: type,
+                );
+              } catch (e) {
+                debugPrint('Delete error: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Failed to delete. Please try again.',
+                      ),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Delete'),
           ),
@@ -167,8 +237,10 @@ class WalletDetailPage extends StatelessWidget {
             builder: (context, snapshot) {
               double balance = 0.0;
 
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final data = snapshot.data!.data() as Map<String, dynamic>;
+              if (snapshot.hasData &&
+                  snapshot.data!.exists) {
+                final data = snapshot.data!.data()
+                    as Map<String, dynamic>;
                 balance = (data['balance'] ?? 0).toDouble();
               }
 
@@ -185,7 +257,9 @@ class WalletDetailPage extends StatelessWidget {
                       children: [
                         Text(
                           'Available Balance',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium,
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -226,58 +300,96 @@ class WalletDetailPage extends StatelessWidget {
                       .where('wallet', isEqualTo: walletId)
                       .snapshots(),
                   builder: (context, expenseSnap) {
-                    if (!incomeSnap.hasData || !expenseSnap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                    if (!incomeSnap.hasData ||
+                        !expenseSnap.hasData) {
+                      return const Center(
+                          child:
+                              CircularProgressIndicator());
                     }
 
-                    final List<Map<String, dynamic>> items = [
+                    final List<Map<String, dynamic>> items =
+                        [
                       ...incomeSnap.data!.docs.map((d) => {
                             'id': d.id,
                             'wallet': d['wallet'],
                             'type': 'income',
-                            'amount': (d['amount'] as num).toDouble(),
-                            'description': d['description'] ?? '',
-                            'date': (d['date'] as Timestamp).toDate(),
+                            'amount': (d['amount'] as num)
+                                .toDouble(),
+                            'description':
+                                d['description'] ?? '',
+                            'date': (d['date'] as Timestamp)
+                                .toDate(),
                           }),
                       ...expenseSnap.data!.docs.map((d) => {
                             'id': d.id,
                             'wallet': d['wallet'],
                             'type': 'expense',
-                            'amount': (d['amount'] as num).toDouble(),
-                            'description': d['description'] ?? '',
-                            'date': (d['date'] as Timestamp).toDate(),
+                            'amount': (d['amount'] as num)
+                                .toDouble(),
+                            'description':
+                                d['description'] ?? '',
+                            'date': (d['date'] as Timestamp)
+                                .toDate(),
                           }),
                     ];
 
-                    items.sort((a, b) => b['date'].compareTo(a['date']));
+                    items.sort((a, b) =>
+                        b['date'].compareTo(a['date']));
 
                     if (items.isEmpty) {
-                      return const Center(child: Text('No transactions found'));
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: colorScheme.outline,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No transactions yet',
+                              style: TextStyle(
+                                color: colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
                     }
 
                     return ListView.builder(
                       itemCount: items.length,
                       itemBuilder: (context, index) {
                         final tx = items[index];
-                        final isIncome = tx['type'] == 'income';
+                        final isIncome =
+                            tx['type'] == 'income';
 
                         return Card(
                           child: ListTile(
                             leading: Icon(
                               isIncome
-                                  ? Icons.arrow_downward
-                                  : Icons.arrow_upward,
-                              color: isIncome ? Colors.green : Colors.red,
+                                  ? Icons.arrow_upward
+                                  : Icons.arrow_downward,
+                              color: isIncome
+                                  ? Colors.green.shade600
+                                  : colorScheme.error,
                             ),
                             title: Text(tx['description']),
                             subtitle: Text(
-                              DateFormat.yMMMd().format(tx['date']),
+                              '${DateFormat.yMMMd().format(tx['date'])} • Hold to edit',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colorScheme.outline,
+                              ),
                             ),
                             trailing: Text(
                               '${isIncome ? '+' : '-'} ₹${tx['amount'].toStringAsFixed(2)}',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: isIncome ? Colors.green : Colors.red,
+                                color: isIncome
+                                    ? Colors.green.shade600
+                                    : colorScheme.error,
                               ),
                             ),
                             onLongPress: () {

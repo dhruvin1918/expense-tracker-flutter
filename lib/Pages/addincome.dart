@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Addincome extends StatefulWidget {
   const Addincome({super.key});
@@ -19,6 +20,13 @@ class _AddincomeState extends State<Addincome> {
   DateTime _selectedDate = DateTime.now();
   String _selectedWallet = 'cash';
   bool _isSaving = false;
+  final List<int> _quickAmounts = [100, 200, 500, 1000, 2000];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDefaults();
+  }
 
   @override
   void dispose() {
@@ -29,8 +37,7 @@ class _AddincomeState extends State<Addincome> {
 
   void _presentDatePicker() async {
     final now = DateTime.now();
-    final firstDate =
-        DateTime(now.year - 5, now.month, now.day);
+    final firstDate = DateTime(now.year - 5, now.month, now.day);
 
     final pickedDate = await showDatePicker(
       context: context,
@@ -51,9 +58,7 @@ class _AddincomeState extends State<Addincome> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Please sign in before adding income.')),
+        const SnackBar(content: Text('Please sign in before adding income.')),
       );
       return;
     }
@@ -80,11 +85,9 @@ class _AddincomeState extends State<Addincome> {
           .collection('transactions')
           .doc(); // <-- create doc reference
 
-      await FirebaseFirestore.instance
-          .runTransaction((transaction) async {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
         final walletSnap = await transaction.get(walletRef);
-        final currentBalance =
-            (walletSnap.data()?['balance'] ?? 0).toDouble();
+        final currentBalance = (walletSnap.data()?['balance'] ?? 0).toDouble();
 
         transaction.set(
           walletRef,
@@ -112,10 +115,24 @@ class _AddincomeState extends State<Addincome> {
 
       if (!mounted) return;
 
+      _saveDefaults();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Income added successfully!'),
           backgroundColor: Colors.green.shade600,
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              _undoIncome(
+                userId: user.uid,
+                amount: amount,
+                wallet: _selectedWallet,
+                incomeId: incomeRef.id,
+                transactionId: transactionRef.id,
+              );
+            },
+          ),
         ),
       );
 
@@ -125,8 +142,7 @@ class _AddincomeState extends State<Addincome> {
       debugPrint('Income save error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Failed to save income. Please try again.'),
+          content: Text('Failed to save income. Please try again.'),
         ),
       );
     } finally {
@@ -136,14 +152,53 @@ class _AddincomeState extends State<Addincome> {
     }
   }
 
-  InputDecoration _fieldDecoration(
-      BuildContext context, String label) {
+  Future<void> _loadDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _selectedWallet = prefs.getString('default_income_wallet') ?? 'cash';
+    });
+  }
+
+  Future<void> _saveDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('default_income_wallet', _selectedWallet);
+  }
+
+  Future<void> _undoIncome({
+    required String userId,
+    required double amount,
+    required String wallet,
+    required String incomeId,
+    required String transactionId,
+  }) async {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
+    final walletRef = userRef.collection('wallets').doc(wallet);
+    final incomeRef = userRef.collection('income').doc(incomeId);
+    final transactionRef =
+        userRef.collection('transactions').doc(transactionId);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final walletSnap = await transaction.get(walletRef);
+      final currentBalance =
+          walletSnap.exists ? (walletSnap['balance'] ?? 0).toDouble() : 0.0;
+
+      transaction.set(
+        walletRef,
+        {'balance': currentBalance - amount},
+        SetOptions(merge: true),
+      );
+      transaction.delete(incomeRef);
+      transaction.delete(transactionRef);
+    });
+  }
+
+  InputDecoration _fieldDecoration(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest
-          .withOpacity(0.3),
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -167,143 +222,277 @@ class _AddincomeState extends State<Addincome> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Log Your Income'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-
-                // Amount
-                TextFormField(
-                  controller: _amountController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d*\.?\d{0,2}'),
-                    ),
-                  ],
-                  decoration:
-                      _fieldDecoration(context, 'Amount')
-                          .copyWith(
-                    prefixText: '₹ ',
-                  ),
-                  validator: (value) {
-                    if (value == null ||
-                        double.tryParse(value) == null ||
-                        double.parse(value) <= 0) {
-                      return 'Enter valid amount';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 20),
-
-                // Wallet
-                DropdownButtonFormField<String>(
-                  value: _selectedWallet,
-                  decoration: _fieldDecoration(
-                      context, 'Payment Source'),
-                  dropdownColor: colorScheme.surface,
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'cash', child: Text('Cash')),
-                    DropdownMenuItem(
-                        value: 'bank', child: Text('Bank')),
-                    DropdownMenuItem(
-                        value: 'credit',
-                        child: Text('Credit Card')),
-                  ],
-                  onChanged: (value) => setState(
-                      () => _selectedWallet = value!),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Description
-                TextFormField(
-                  controller: _descriptionController,
-                  maxLength: 100,
-                  decoration: _fieldDecoration(
-                      context, 'Description'),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Date
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: colorScheme
-                        .surfaceContainerHighest
-                        .withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: colorScheme.outline),
-                  ),
-                  child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+      backgroundColor: const Color(0xFF1FA36A),
+      body: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        'Date: ${DateFormat.yMd().format(_selectedDate)}',
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_back,
+                              color: Colors.white, size: 18),
+                        ),
                       ),
-                      TextButton.icon(
-                        onPressed: _presentDatePicker,
-                        icon: const Icon(
-                            Icons.calendar_today),
-                        label: const Text('Select Date'),
+                      const Expanded(
+                        child: Text('Add Income',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w500)),
                       ),
+                      const SizedBox(width: 36),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 40),
-
-                // Save Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed:
-                        _isSaving ? null : _saveIncome,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 14),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child:
-                                  CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'Save Income',
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight:
-                                      FontWeight.bold),
-                            ),
+                  const SizedBox(height: 20),
+                  Text('Enter amount',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.75), fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Form(
+                    key: _formKey,
+                    child: TextFormField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 52,
+                        fontWeight: FontWeight.bold,
+                        height: 1,
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: '₹ ',
+                        prefixStyle: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w400),
+                        hintText: '0.00',
+                        hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.35),
+                            fontSize: 52,
+                            fontWeight: FontWeight.bold),
+                        border: InputBorder.none,
+                        errorStyle: const TextStyle(color: Colors.white),
+                      ),
+                      validator: (value) {
+                        if (value == null ||
+                            double.tryParse(value) == null ||
+                            double.parse(value) <= 0) {
+                          return 'Enter valid amount';
+                        }
+                        return null;
+                      },
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    children: _quickAmounts
+                        .map((amt) => GestureDetector(
+                              onTap: () => setState(() =>
+                                  _amountController.text = amt.toString()),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: Colors.white.withOpacity(0.4)),
+                                ),
+                                child: Text('₹$amt',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500)),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
                 ),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    _FieldTile(
+                      iconBg: const Color(0xFFE6F1FB),
+                      iconColor: const Color(0xFF185FA5),
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Wallet',
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedWallet,
+                          isExpanded: true,
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'cash', child: Text('Cash')),
+                            DropdownMenuItem(
+                                value: 'bank', child: Text('Bank')),
+                            DropdownMenuItem(
+                                value: 'credit', child: Text('Credit Card')),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _selectedWallet = value!);
+                            _saveDefaults();
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _presentDatePicker,
+                      child: _FieldTile(
+                        iconBg: const Color(0xFFEAF3DE),
+                        iconColor: const Color(0xFF3B6D11),
+                        icon: Icons.calendar_today_outlined,
+                        label: 'Date',
+                        child: Text(
+                          DateFormat('EEE, MMM d yyyy').format(_selectedDate),
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: Colors.grey, size: 20),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _FieldTile(
+                      iconBg: const Color(0xFFF1EFE8),
+                      iconColor: const Color(0xFF5F5E5A),
+                      icon: Icons.notes_outlined,
+                      label: 'Note (optional)',
+                      child: TextField(
+                        controller: _descriptionController,
+                        maxLength: 100,
+                        decoration: const InputDecoration(
+                          hintText: 'Add a note...',
+                          border: InputBorder.none,
+                          counterText: '',
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveIncome,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1FA36A),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Save Income',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FieldTile extends StatelessWidget {
+  const _FieldTile({
+    required this.iconBg,
+    required this.iconColor,
+    required this.icon,
+    required this.label,
+    required this.child,
+    this.trailing,
+  });
+
+  final Color iconBg;
+  final Color iconColor;
+  final IconData icon;
+  final String label;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style:
+                        TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 2),
+                child,
               ],
             ),
           ),
-        ),
+          if (trailing != null) trailing!,
+        ],
       ),
     );
   }

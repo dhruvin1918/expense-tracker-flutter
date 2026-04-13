@@ -26,7 +26,7 @@ class WelcomeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTransparent = color.alpha == 0;
+    final isTransparent = color.a == 0;
 
     final resolvedTextColor = textColor ??
         (isTransparent
@@ -47,7 +47,7 @@ class WelcomeButton extends StatelessWidget {
                 BoxShadow(
                   color: Theme.of(context)
                       .shadowColor
-                      .withOpacity(0.15),
+                      .withValues(alpha: 0.15),
                   blurRadius: 10,
                   offset: const Offset(2, 4),
                 ),

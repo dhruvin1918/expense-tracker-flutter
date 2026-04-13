@@ -47,11 +47,14 @@ final ThemeData lightMode = ThemeData(
   scaffoldBackgroundColor: lightColorScheme.surface,
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ButtonStyle(
-      backgroundColor: WidgetStateProperty.all(lightColorScheme.primary),
-      foregroundColor: WidgetStateProperty.all(lightColorScheme.onPrimary),
+      backgroundColor:
+          WidgetStateProperty.all(lightColorScheme.primary),
+      foregroundColor: WidgetStateProperty.all(
+          lightColorScheme.onPrimary),
       elevation: WidgetStateProperty.all(2.0),
       padding: WidgetStateProperty.all(
-        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        const EdgeInsets.symmetric(
+            horizontal: 16.0, vertical: 8.0),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(
@@ -82,11 +85,14 @@ final ThemeData darkMode = ThemeData(
   colorScheme: darkColorScheme,
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ButtonStyle(
-      backgroundColor: WidgetStateProperty.all(darkColorScheme.primary),
-      foregroundColor: WidgetStateProperty.all(darkColorScheme.onPrimary),
+      backgroundColor:
+          WidgetStateProperty.all(darkColorScheme.primary),
+      foregroundColor: WidgetStateProperty.all(
+          darkColorScheme.onPrimary),
       elevation: WidgetStateProperty.all(2.0),
       padding: WidgetStateProperty.all(
-        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        const EdgeInsets.symmetric(
+            horizontal: 16.0, vertical: 8.0),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(

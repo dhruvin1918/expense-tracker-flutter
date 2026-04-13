@@ -68,7 +68,7 @@ class _SettingState extends State<Setting> {
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !context.mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isResetting = true);
@@ -83,21 +83,21 @@ class _SettingState extends State<Setting> {
 
     try {
       await ResetService.resetUserData();
-      if (!mounted) return;
+      if (!context.mounted) return;
       messenger.showSnackBar(
         const SnackBar(
             content: Text('Data reset successfully')),
       );
     } catch (e) {
       debugPrint('Reset error: $e');
-      if (!mounted) return;
+      if (!context.mounted) return;
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Reset failed. Please try again.'),
         ),
       );
     } finally {
-      if (mounted) {
+      if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
         setState(() => _isResetting = false);
       }
@@ -112,19 +112,25 @@ class _SettingState extends State<Setting> {
     final isDarkMode = themeProvider.isDarkMode;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text("Settings"),
-        centerTitle: true,
-        elevation: 0,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Profile',
+                style:
+                    theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
             // 🔹 PROFILE CARD
             Card(
-              elevation: 4,
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -184,6 +190,7 @@ class _SettingState extends State<Setting> {
             const SizedBox(height: 10),
 
             Card(
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -219,6 +226,7 @@ class _SettingState extends State<Setting> {
             const SizedBox(height: 10),
 
             Card(
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -236,6 +244,7 @@ class _SettingState extends State<Setting> {
 
             // 🔹 RESET DATA
             Card(
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),

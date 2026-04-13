@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class TransactionService {
   // DELETE TRANSACTION
@@ -15,6 +16,9 @@ class TransactionService {
           'User must be authenticated to delete a transaction.');
     }
 
+    final collection =
+        type == 'income' ? 'income' : 'expenses';
+
     final walletRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -24,23 +28,42 @@ class TransactionService {
     final transactionRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .collection(
-            type == 'income' ? 'income' : 'expenses')
+        .collection(collection)
         .doc(transactionId);
 
-    await FirebaseFirestore.instance
-        .runTransaction((tx) async {
-      final walletSnap = await tx.get(walletRef);
-      final currentBalance =
-          (walletSnap['balance'] ?? 0).toDouble();
+    final auditRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('transactions')
+        .doc(transactionId);
 
-      final newBalance = type == 'income'
-          ? currentBalance - amount
-          : currentBalance + amount;
+    try {
+      await FirebaseFirestore.instance
+          .runTransaction((tx) async {
+        final walletSnap = await tx.get(walletRef);
+        final currentBalance =
+          (walletSnap.data()?['balance'] ?? 0)
+            .toDouble();
 
-      tx.update(walletRef, {'balance': newBalance});
-      tx.delete(transactionRef);
-    });
+        if (type == 'income' && currentBalance < amount) {
+          throw Exception(
+            'Deleting this income would result in negative balance.',
+          );
+        }
+
+        final newBalance = type == 'income'
+            ? currentBalance - amount
+            : currentBalance + amount;
+
+        tx.update(walletRef, {'balance': newBalance});
+        tx.delete(transactionRef);
+        tx.delete(auditRef);
+      });
+    } catch (e) {
+      debugPrint(
+          'TransactionService.deleteTransaction error: $e');
+      rethrow;
+    }
   }
 
   // UPDATE TRANSACTION
@@ -58,6 +81,9 @@ class TransactionService {
           'User must be authenticated to update a transaction.');
     }
 
+    final collection =
+        type == 'income' ? 'income' : 'expenses';
+
     final walletRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -67,30 +93,46 @@ class TransactionService {
     final transactionRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .collection(
-            type == 'income' ? 'income' : 'expenses')
+        .collection(collection)
         .doc(transactionId);
 
-    await FirebaseFirestore.instance
-        .runTransaction((tx) async {
-      final walletSnap = await tx.get(walletRef);
-      final currentBalance =
-          (walletSnap['balance'] ?? 0).toDouble();
+    final auditRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('transactions')
+        .doc(transactionId);
 
-      double updatedBalance;
-      if (type == 'income') {
-        updatedBalance =
-            currentBalance - oldAmount + newAmount;
-      } else {
-        updatedBalance =
-            currentBalance + oldAmount - newAmount;
-      }
+    try {
+      await FirebaseFirestore.instance
+          .runTransaction((tx) async {
+        final walletSnap = await tx.get(walletRef);
+        final currentBalance =
+          (walletSnap.data()?['balance'] ?? 0)
+            .toDouble();
 
-      tx.update(walletRef, {'balance': updatedBalance});
-      tx.update(transactionRef, {
-        'amount': newAmount,
-        'description': description,
+        double updatedBalance;
+        if (type == 'income') {
+          updatedBalance =
+              currentBalance - oldAmount + newAmount;
+        } else {
+          updatedBalance =
+              currentBalance + oldAmount - newAmount;
+        }
+
+        tx.update(walletRef, {'balance': updatedBalance});
+        tx.update(transactionRef, {
+          'amount': newAmount,
+          'description': description,
+        });
+        tx.update(auditRef, {
+          'amount': newAmount,
+          'description': description,
+        });
       });
-    });
+    } catch (e) {
+      debugPrint(
+          'TransactionService.updateTransaction error: $e');
+      rethrow;
+    }
   }
 }
